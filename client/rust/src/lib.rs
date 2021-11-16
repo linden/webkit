@@ -52,9 +52,13 @@ pub fn open(height: u16, width: u16) -> Window {
 		port: random_port()
 	};
 	
-	detach! {
-		"./webkitd {} '{}' {} {} >> ./webkitd.log" window.port window.key height width;
-	};
+	if cfg!(target_os = "macos") {
+		detach! {
+			"./webkitd {} '{}' {} {} >> ./webkitd.log" window.port window.key height width;
+		};
+	} else {
+		unimplemented!("currently we only support MacOS");
+	}
 	
 	loop {
 		if is_port_free(window.port) == false {
@@ -76,7 +80,9 @@ impl Window {
 		let plain = serde_json::to_string(&request).unwrap();
 	    let mut stream = TcpStream::connect(&format!("127.0.0.1:{}", &self.port)).unwrap();
 
-	    stream.write(plain.as_bytes());
+	    if let Err(error) = stream.write(plain.as_bytes()) {
+	    	panic!("couldn't make request to window because {}", error)
+	    }
 	}
 	
 	pub fn hide(&self) {

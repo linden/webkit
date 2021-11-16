@@ -176,8 +176,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 	func windowDidResize(_ notification: Notification) {
 		self.webview!.frame.size.height = self.window.frame.size.height - 28.5
 		self.webview!.frame.size.width = self.window.frame.size.width
-		
-		print("window resized", self.webview!.frame.size, self.window.frame.size)
 	}
 }
 
