@@ -17,7 +17,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 	let window = NSWindow.init(contentRect: NSRect(x: 0, y: 0, width: 750, height: 600), styleMask: [
 		NSWindow.StyleMask.titled,
 		NSWindow.StyleMask.closable,
-		NSWindow.StyleMask.resizable
+		NSWindow.StyleMask.resizable,
+		NSWindow.StyleMask.miniaturizable
 	], backing: NSWindow.BackingStoreType.buffered, defer: false)
 	
 	var webview: Optional<WKWebView> = Optional.none
@@ -170,6 +171,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
 	func windowWillClose(_ notification: Notification) {
 		app.terminate(self)
+	}
+	
+	func windowDidResize(_ notification: Notification) {
+		self.webview!.frame.size.height = self.window.frame.size.height - 28.5
+		self.webview!.frame.size.width = self.window.frame.size.width
+		
+		print("window resized", self.webview!.frame.size, self.window.frame.size)
 	}
 }
 
