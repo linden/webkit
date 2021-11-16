@@ -1,0 +1,10 @@
+[package]
+name = "webkit"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+rand = "0.8.0"
+btl = "0.2.7"
