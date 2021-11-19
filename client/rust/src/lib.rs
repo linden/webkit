@@ -46,15 +46,21 @@ fn random_port() -> u16 {
 	panic!("magically no ports were found");
 }
 
-pub fn open(height: u16, width: u16) -> Window {
+pub fn open(height: u16, width: u16, proxy: bool) -> Window {
 	let window = Window {
 		key: random_key(),
 		port: random_port()
 	};
 	
 	if cfg!(target_os = "macos") {
+		let proxied = if proxy == true {
+				"true"
+			} else {
+				"false"
+			};
+		
 		detach! {
-			"./webkitd {} '{}' {} {} >> ./webkitd.log" window.port window.key height width;
+			"./webkitd {} '{}' {} {} {} >> ./webkitd.log" window.port window.key height width proxied;
 		};
 	} else {
 		unimplemented!("currently we only support MacOS");

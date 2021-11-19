@@ -3,7 +3,7 @@ use std::{thread, time};
 use webkit;
 
 fn main() {
-	let window = webkit::open(250, 250);
+	let window = webkit::open(250, 250, false);
 		
 	let mut index = 0;
 	
