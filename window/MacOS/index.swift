@@ -62,7 +62,6 @@ extension NSURL {
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKURLSchemeHandler {
-	var proxy_requests = false
 	var key = ""
 	
 	let window = NSWindow.init(contentRect: NSRect(x: 0, y: 0, width: 750, height: 600), styleMask: [
@@ -75,73 +74,84 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKURLSchem
 	var webview: Optional<WKWebView> = Optional.none
 
 	func receive(connection: NWConnection) {
-		connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { (message, _, done, error) in
-			if let message = message, !message.isEmpty {
-				let decoder = JSONDecoder()
-			
-				guard let request = try? decoder.decode(Request.self, from: message) else {
-					print("request: invalid json")
-				
-					connection.cancel()
-					return
-				} 
-				
-				if (request.key != self.key) {
-					print("invalid key for window")
-					
-					connection.cancel()
-					return
-				}
-				
-				print("request: ", request)
-				
-				switch request.event {
-				case "hide":
-					app.hide(nil)
-					
-				case "show":
-					app.unhide(nil)
-					
-			       	self.window.makeKeyAndOrderFront(nil)
-					self.window.orderFrontRegardless()
-					
-				case "set_title":
-					self.window.title = request.body!
-					
-				case "set_body":
-				   	self.webview!.loadHTMLString(request.body!, baseURL: URL(string: "about:blank"))
-					
-				case "close":
-					app.terminate(self)
-					return
-				
-				default: 
-					print("unknown command", request.event)
-					
-				}
-			}
-		
-			if done || error != nil {
+		connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { (plain, _, done, error) in
+			guard let message = plain else {
 				connection.cancel()
 				return
 			}
+			
+			if message.isEmpty || error != nil {
+				connection.cancel()
+				return
+			}
+
+			let decoder = JSONDecoder()
+			
+			guard let request = try? decoder.decode(Request.self, from: message) else {
+				print("request: invalid json")
+			
+				connection.cancel()
+				return
+			} 
+			
+			if (request.key != self.key) {
+				print("invalid key for window")
+				
+				connection.cancel()
+				return
+			}
+			
+			print("request: ", request)
+			
+			switch request.event {
+			case "hide":
+				app.hide(nil)
+				
+			case "show":
+				app.unhide(nil)
+				
+			      	self.window.makeKeyAndOrderFront(nil)
+				self.window.orderFrontRegardless()
+				
+			case "set_title":
+				self.window.title = request.body!
+				
+			case "set_body":
+			   	self.webview!.loadHTMLString(request.body!, baseURL: URL(string: "about:blank"))
+				
+			case "close":
+				app.terminate(self)
+				return
+			
+			default: 
+				print("unknown command", request.event)
+				
+			}
 		
-			self.receive(connection: connection)
+			if done == false {
+				self.receive(connection: connection)
+			}
 		}
 	}
 	
-	func direct(connection: NWConnection) {
+	func route(connection: NWConnection) {
 		print("new client:", connection.endpoint)
 	
 		connection.start(queue: .main)
 	
-		receive(connection: connection)
+		self.receive(connection: connection)
+	}
 	
-	    connection.send(content: "Hello World".data(using: .utf8), completion: .contentProcessed({ plain in
-			if let error = plain {
-				print("error:", error)
+	func message(connection: NWConnection, message: String) -> Bool {
+		var done = true
+		
+		connection.send(content: message.data(using: .utf8), completion: .contentProcessed({ error in
+			if error != nil {
+				done = false
 			}
 	    }))
+		
+		return done
 	}
 
 	func resize(width: Int, height: Int) {
@@ -233,7 +243,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKURLSchem
 			let port = NWEndpoint.Port(rawValue: plainPort)!
 			let listener = try! NWListener(using: .tcp, on: port)
 			
-			listener.newConnectionHandler = self.direct(connection:)
+			listener.newConnectionHandler = self.route(connection:)
 			listener.start(queue: .main)
 			
 			RunLoop.current.run()
