@@ -12,4 +12,6 @@ fn main() {
 
 	window_a.show();
 	window_b.show();
+	
+	loop {}
 }
