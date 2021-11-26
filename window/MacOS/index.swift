@@ -1,12 +1,11 @@
 import Foundation
-import Network
+import Darwin
 import AppKit
 import WebKit
 
 struct Request: Decodable {
     let event: String
     let body: String?
-	let key: String
 }
 
 let app = NSApplication.shared
@@ -62,8 +61,6 @@ extension NSURL {
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKURLSchemeHandler {
-	var key = ""
-	
 	let window = NSWindow.init(contentRect: NSRect(x: 0, y: 0, width: 750, height: 600), styleMask: [
 		NSWindow.StyleMask.titled,
 		NSWindow.StyleMask.closable,
@@ -73,85 +70,67 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKURLSchem
 	
 	var webview: Optional<WKWebView> = Optional.none
 
-	func receive(connection: NWConnection) {
-		connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { (plain, _, done, error) in
-			guard let message = plain else {
-				connection.cancel()
-				return
-			}
-			
-			if message.isEmpty || error != nil {
-				connection.cancel()
-				return
-			}
+	func route(message: String) {
+		if message.isEmpty {
+			return
+		}
 
-			let decoder = JSONDecoder()
-			
-			guard let request = try? decoder.decode(Request.self, from: message) else {
-				print("request: invalid json")
-			
-				connection.cancel()
-				return
-			} 
-			
-			if (request.key != self.key) {
-				print("invalid key for window")
-				
-				connection.cancel()
-				return
-			}
-			
-			print("request: ", request)
-			
-			switch request.event {
-			case "hide":
-				app.hide(nil)
-				
-			case "show":
-				app.unhide(nil)
-				
-			      	self.window.makeKeyAndOrderFront(nil)
-				self.window.orderFrontRegardless()
-				
-			case "set_title":
-				self.window.title = request.body!
-				
-			case "set_body":
-			   	self.webview!.loadHTMLString(request.body!, baseURL: URL(string: "about:blank"))
-				
-			case "close":
-				app.terminate(self)
-				return
-			
-			default: 
-				print("unknown command", request.event)
-				
-			}
+		let decoder = JSONDecoder()
 		
-			if done == false {
-				self.receive(connection: connection)
-			}
+		guard let request = try? decoder.decode(Request.self, from: message.data(using: .utf8)!) else {
+			return
+		}
+		
+		switch request.event {
+		case "hide":
+			app.hide(nil)
+			
+		case "show":
+			app.unhide(nil)
+			
+		    self.window.makeKeyAndOrderFront(nil)
+			self.window.orderFrontRegardless()
+			
+		case "set_height":
+			self.resize(width: Int(self.window.frame.size.width), height: Int(request.body!)!)
+			
+		case "set_width":
+			self.resize(width: Int(request.body!)!, height: Int(self.window.frame.size.height))
+			
+		case "set_title":
+			self.window.title = request.body!
+			
+		case "set_body":
+		   	self.webview!.loadHTMLString(request.body!, baseURL: URL(string: "about:blank"))
+			
+		case "close":
+			app.terminate(self)
+			return
+			
+		case "toggle_proxy":
+			NSURL.doSwizzle()
+			
+			let configuration = WKWebViewConfiguration()
+			
+			configuration.setURLSchemeHandler(self, forURLScheme: "webview")
+			
+		   	let newWebview = WKWebView(frame: window.contentView!.frame, configuration: configuration)
+		
+		   	let request = URLRequest(url: URL(string: "about:blank")!)
+
+		   	window.contentView?.replaceSubview(webview!, with: newWebview)
+		   	newWebview.load(request)
+			
+			webview = newWebview
+		
+		default: 
+			print("unknown command", request.event)
+			
 		}
 	}
 	
-	func route(connection: NWConnection) {
-		print("new client:", connection.endpoint)
-	
-		connection.start(queue: .main)
-	
-		self.receive(connection: connection)
-	}
-	
-	func message(connection: NWConnection, message: String) -> Bool {
-		var done = true
-		
-		connection.send(content: message.data(using: .utf8), completion: .contentProcessed({ error in
-			if error != nil {
-				done = false
-			}
-	    }))
-		
-		return done
+	func message(message: String) {
+		fputs(message + "\n", stderr)
 	}
 
 	func resize(width: Int, height: Int) {
@@ -162,67 +141,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKURLSchem
 		self.window.setFrame(frame, display: true)
 	}
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
-		if (CommandLine.arguments.count < 2) {
-			print("port argument required, example: ./webkitd 1234 access_key 250 250 true\r\n")
-			
-			app.terminate(self)
-			return
-		}
-	
-		guard let plainPort = UInt16(CommandLine.arguments[1]) else {
-			print("port", CommandLine.arguments[1], "is invalid")
-			
-			app.terminate(self)
-			return
-		}
-		
-		if (CommandLine.arguments.count < 3) {
-			print("access key argument required, example: ./webkitd 1234 access_key 250 250 true\r\n")
-			
-			app.terminate(self)
-			return
-		}
-		
-		if (CommandLine.arguments.count < 5) {
-			print("width and height argument required, example: ./webkitd 1234 access_key 250 250 true\r\n")
-			
-			app.terminate(self)
-			return
-		}
-		
-		guard let height = Int(CommandLine.arguments[3]) else {
-			print("height is invalid")
-			
-			app.terminate(self)
-			return
-		}
-		
-		guard let width = Int(CommandLine.arguments[4]) else {
-			print("width is invalid")
-			
-			app.terminate(self)
-			return
-		}
-		
-		self.resize(width: width, height: height)
-		
-		if (CommandLine.arguments.count < 6) {
-			print("proxy requests (true/false) argument required, example: ./webkitd 1234 access_key 250 250 true\r\n")
-			
-			app.terminate(self)
-			return
-		}
-		
-		key = CommandLine.arguments[2]
-		
-		let configuration = WKWebViewConfiguration()
-		
-		if (CommandLine.arguments[5] == "true") {
-			NSURL.doSwizzle()
-			configuration.setURLSchemeHandler(self, forURLScheme: "webview")
-		}
-		
+    func applicationDidFinishLaunching(_ notification: Notification) {		
        	window.makeKeyAndOrderFront(nil)
 		window.orderFrontRegardless()
 		window.center()
@@ -232,7 +151,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKURLSchem
 		window.delegate = self
 		window.title = "Loading..."
 
-	   	webview = WKWebView(frame: window.contentView!.frame, configuration: configuration)
+	   	webview = WKWebView(frame: window.contentView!.frame)
 		
 	   	let request = URLRequest(url: URL(string: "about:blank")!)
 
@@ -240,13 +159,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKURLSchem
 	   	webview!.load(request)
 		
 		DispatchQueue(label: "background").async {
-			let port = NWEndpoint.Port(rawValue: plainPort)!
-			let listener = try! NWListener(using: .tcp, on: port)
-			
-			listener.newConnectionHandler = self.route(connection:)
-			listener.start(queue: .main)
-			
-			RunLoop.current.run()
+			while let line = readLine() {
+				DispatchQueue.main.async {
+					self.route(message: line)
+				}
+			}
 		}
     }
 
@@ -264,7 +181,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKURLSchem
 		let method = URLSchemeTask.request.httpMethod!
 		
 		print("proxy", method, url)
-	    
+
 		let body = "<h1>intercepted " + url.absoluteString + " by proxy</h1>"
 	    let response = URLResponse(url: url, mimeType: "text/html", expectedContentLength: body.count, textEncodingName: nil)
 

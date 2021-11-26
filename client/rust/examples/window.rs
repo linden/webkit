@@ -10,8 +10,8 @@ fn main() {
 	window.show();
 	
 	loop {
-		window.set_body(&format!("Hello for the {}th time", index));
-		window.set_title(&format!("Hello #{}", index));
+		window.set_body(format!("Hello for the {}th time", index));
+		window.set_title(format!("Hello #{}", index));
 		
 		thread::sleep(time::Duration::from_millis(500));
 		index = index + 1;
